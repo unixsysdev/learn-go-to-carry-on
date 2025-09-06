@@ -1,0 +1,47 @@
+{
+  "mcpServers": {
+    "serena": {
+      "command": "/home/ubuntu/.local/bin/uvx",
+      "args": [
+        "--from",
+        "git+https://github.com/oraios/serena",
+        "serena",
+        "start-mcp-server"
+      ],
+      "alwaysAllow": [
+        "read_file",
+        "create_text_file",
+        "list_dir",
+        "find_file",
+        "replace_regex",
+        "search_for_pattern",
+        "get_symbols_overview",
+        "find_symbol",
+        "prepare_for_new_conversation",
+        "think_about_whether_you_are_done",
+        "think_about_task_adherence",
+        "replace_symbol_body",
+        "find_referencing_symbols",
+        "insert_after_symbol",
+        "insert_before_symbol",
+        "write_memory",
+        "delete_memory",
+        "onboarding",
+        "check_onboarding_performed",
+        "execute_shell_command",
+        "list_memories",
+        "switch_modes",
+        "think_about_collected_information",
+        "activate_project",
+        "read_memory"
+      ]
+    },
+     "spec-driven": {
+       "command": "npx",
+        "args": [
+           "-y",
+           "mcp-server-spec-driven-development@latest"
+        ]
+    }
+  }
+}
