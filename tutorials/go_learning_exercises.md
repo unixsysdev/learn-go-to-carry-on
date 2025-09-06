@@ -12,13 +12,6 @@
    - [Exercise 5: Implement WebSockets](#exercise-5-implement-websockets)
    - [Exercise 6: Add Rate Limiting](#exercise-6-add-rate-limiting)
    - [Exercise 7: Create Unit Tests](#exercise-7-create-unit-tests)
-   - [Exercise 8: Add Metrics](#exercise-8-add-metrics)
-4. [Advanced Exercises](#advanced-exercises)
-   - [Exercise 9: Microservices Architecture](#exercise-9-microservices-architecture)
-   - [Exercise 10: gRPC Implementation](#exercise-10-grpc-implementation)
-   - [Exercise 11: Event-Driven Architecture](#exercise-11-event-driven-architecture)
-   - [Exercise 12: Container Orchestration](#exercise-12-container-orchestration)
-5. [Conclusion](#conclusion)
 
 ## Introduction
 
@@ -3230,4 +3223,786 @@ func TestUserService_CreateUser(t *testing.T) {
     service := NewMockUserService()
     
     // Test creating a valid user
+    newUser := &models.User{
+        Username:  "newtestuser",
+        Email:     "newtest@example.com",
+        FirstName: "New",
+        LastName:  "Test",
+        Age:       25,
+        PhoneNumber: "+1 (555) 987-6543",
+    }
+    
+    err := service.CreateUser(newUser)
+    if err != nil {
+        t.Errorf("CreateUser() returned error: %v", err)
+    }
+    
+    if newUser.ID == 0 {
+        t.Error("Expected CreateUser to set ID")
+    }
+    
+    // Verify the user was created
+    createdUser, err := service.GetUserByID(newUser.ID)
+    if err != nil {
+        t.Errorf("Failed to get created user: %v", err)
+    }
+    
+    if createdUser.Username != newUser.Username {
+        t.Errorf("Created user username mismatch: got %s, want %s", createdUser.Username, newUser.Username)
+    }
+    
+    // Test creating user with invalid data
+    invalidUser := &models.User{
+        Username:  "invaliduser",
+        Email:     "invalid-email",
+        FirstName: "Invalid",
+        LastName:  "User",
+        Age:       25,
+    }
+    
+    err = service.CreateUser(invalidUser)
+    if err == nil {
+        t.Error("Expected CreateUser to return validation error for invalid email")
+    }
+    
+    if err.Error() != "user validation failed: invalid email format" {
+        t.Errorf("Expected specific validation error, got: %v", err)
+    }
+    
+    // Test duplicate username
+    duplicateUser := &models.User{
+        Username:  "testuser", // Same as the initial sample user
+        Email:     "duplicate@example.com",
+        FirstName: "Duplicate",
+        LastName:  "User",
+        Age:       30,
+    }
+    
+    err = service.CreateUser(duplicateUser)
+    if err == nil {
+        t.Error("Expected CreateUser to return error for duplicate username")
+    }
+    
+    if err.Error() != "username 'testuser' already exists" {
+        t.Errorf("Expected duplicate username error, got: %v", err)
+    }
+}
+
+// TestUserService_UpdateUser tests updating an existing user
+func TestUserService_UpdateUser(t *testing.T) {
+    service := NewMockUserService()
+    
+    // Create a user to update
+    user := &models.User{
+        ID:        1,
+        Username:  "updateuser",
+        Email:     "update@example.com",
+        FirstName: "Update",
+        LastName:  "User",
+        Age:       25,
+    }
+    service.users[1] = user
+    
+    // Test updating with valid data
+    user.Age = 30
+    user.FirstName = "Updated"
+    
+    err := service.UpdateUser(user)
+    if err != nil {
+        t.Errorf("UpdateUser() returned error: %v", err)
+    }
+    
+    // Verify the user was updated
+    updatedUser, err := service.GetUserByID(1)
+    if err != nil {
+        t.Errorf("Failed to get updated user: %v", err)
+    }
+    
+    if updatedUser.Age != 30 {
+        t.Errorf("User age was not updated, got %d, want 30", updatedUser.Age)
+    }
+    
+    if updatedUser.FirstName != "Updated" {
+        t.Errorf("User first name was not updated, got %s, want Updated", updatedUser.FirstName)
+    }
+    
+    // Test updating non-existent user
+    nonExistentUser := &models.User{
+        ID:        999,
+        Username:  "nonexistent",
+        Email:     "nonexistent@example.com",
+        FirstName: "Non",
+        LastName:  "Existent",
+        Age:       40,
+    }
+    
+    err = service.UpdateUser(nonExistentUser)
+    if err == nil {
+        t.Error("Expected UpdateUser to return error for non-existent user")
+    }
+    
+    if err.Error() != "user with ID 999 not found" {
+        t.Errorf("Expected specific error for non-existent user, got: %v", err)
+    }
+    
+    // Test updating with invalid data
+    invalidUser := &models.User{
+        ID:        1,
+        Username:  "",
+        Email:     "update@example.com",
+        FirstName: "Update",
+        LastName:  "User",
+        Age:       30,
+    }
+    
+    err = service.UpdateUser(invalidUser)
+    if err == nil {
+        t.Error("Expected UpdateUser to return validation error for empty username")
+    }
+    
+    if err.Error() != "user validation failed: username cannot be empty" {
+        t.Errorf("Expected specific validation error, got: %v", err)
+    }
+}
+
+// TestUserService_DeleteUser tests deleting a user
+func TestUserService_DeleteUser(t *testing.T) {
+    service := NewMockUserService()
+    
+    // Test deleting an existing user
+    err := service.DeleteUser(1)
+    if err != nil {
+        t.Errorf("DeleteUser(1) returned error: %v", err)
+    }
+    
+    // Verify the user was deleted
+    _, err = service.GetUserByID(1)
+    if err == nil {
+        t.Error("Expected GetUserByID(1) to return error after deletion")
+    }
+    
+    if err.Error() != "user with ID 1 not found" {
+        t.Errorf("Expected specific error after deletion, got: %v", err)
+    }
+    
+    // Test deleting a non-existent user
+    err = service.DeleteUser(999)
+    if err == nil {
+        t.Error("Expected DeleteUser to return error for non-existent user")
+    }
+    
+    if err.Error() != "user with ID 999 not found" {
+        t.Errorf("Expected specific error for non-existent user, got: %v", err)
+    }
+}
+
+// TestUserService_GetUserByUsername tests getting user by username
+func TestUserService_GetUserByUsername(t *testing.T) {
+    service := NewMockUserService()
+    
+    // Test getting existing user by username
+    user, err := service.GetUserByUsername("testuser")
+    if err != nil {
+        t.Errorf("GetUserByUsername('testuser') returned error: %v", err)
+    }
+    
+    if user.Username != "testuser" {
+        t.Errorf("GetUserByUsername('testuser') returned wrong user: %s", user.Username)
+    }
+    
+    // Test getting non-existent user by username
+    user, err = service.GetUserByUsername("nonexistent")
+    if err == nil {
+        t.Error("Expected GetUserByUsername to return error for non-existent user")
+    }
+    
+    if user != nil {
+        t.Error("Expected GetUserByUsername to return nil for non-existent user")
+    }
+    
+    if err.Error() != "user with username 'nonexistent' not found" {
+        t.Errorf("Expected specific error for non-existent username, got: %v", err)
+    }
+}
+
+// TestUserService_SearchUsers tests searching users
+func TestUserService_SearchUsers(t *testing.T) {
+    service := NewMockUserService()
+    
+    // Test searching with valid query
+    users, err := service.SearchUsers("test")
+    if err != nil {
+        t.Errorf("SearchUsers('test') returned error: %v", err)
+    }
+    
+    if len(users) != 1 {
+        t.Errorf("SearchUsers('test') returned %d users, expected 1", len(users))
+    }
+    
+    // Test searching with empty query (should return all users)
+    users, err = service.SearchUsers("")
+    if err != nil {
+        t.Errorf("SearchUsers('') returned error: %v", err)
+    }
+    
+    if len(users) != 1 {
+        t.Errorf("SearchUsers('') returned %d users, expected 1", len(users))
+    }
+}
+
+// TestUserService_GetUserStats tests getting user statistics
+func TestUserService_GetUserStats(t *testing.T) {
+    service := NewMockUserService()
+    
+    stats, err := service.GetUserStats()
+    if err != nil {
+        t.Errorf("GetUserStats() returned error: %v", err)
+    }
+    
+    if stats.TotalUsers != 1 {
+        t.Errorf("GetUserStats() returned total_users %d, expected 1", stats.TotalUsers)
+    }
+    
+    if stats.ActiveUsers != 1 {
+        t.Errorf("GetUserStats() returned active_users %d, expected 1", stats.ActiveUsers)
+    }
+    
+    if stats.InactiveUsers != 0 {
+        t.Errorf("GetUserStats() returned inactive_users %d, expected 0", stats.InactiveUsers)
+    }
+    
+    if stats.AverageAge != 25 {
+        t.Errorf("GetUserStats() returned average_age %d, expected 25", stats.AverageAge)
+    }
+}
+
+// TestUserService_RequestPasswordReset tests password reset request
+func TestUserService_RequestPasswordReset(t *testing.T) {
+    service := NewMockUserService()
+    
+    // Add a user with email for testing
+    user := &models.User{
+        ID:        2,
+        Username:  "resetuser",
+        Email:     "reset@example.com",
+        FirstName: "Reset",
+        LastName:  "User",
+        Age:       25,
+    }
+    service.users[2] = user
+    
+    err := service.RequestPasswordReset("reset@example.com")
+    if err != nil {
+        t.Errorf("RequestPasswordReset('reset@example.com') returned error: %v", err)
+    }
+    
+    // Verify the token was set (in real implementation, check database)
+    if user.ResetToken == "" {
+        t.Error("Expected RequestPasswordReset to set reset token")
+    }
+    
+    if user.ResetTokenExpiresAt.IsZero() {
+        t.Error("Expected RequestPasswordReset to set expiration time")
+    }
+    
+    // Test with non-existent email
+    err = service.RequestPasswordReset("nonexistent@example.com")
+    if err == nil {
+        t.Error("Expected RequestPasswordReset to return error for non-existent email")
+    }
+    
+    if err.Error() != "user with email 'nonexistent@example.com' not found" {
+        t.Errorf("Expected specific error for non-existent email, got: %v", err)
+    }
+}
+
+// TestUserService_ResetPassword tests password reset
+func TestUserService_ResetPassword(t *testing.T) {
+    service := NewMockUserService()
+    
+    // Add a user with reset token for testing
+    user := &models.User{
+        ID:        3,
+        Username:  "resetpwuser",
+        Email:     "resetpw@example.com",
+        FirstName: "ResetPW",
+        LastName:  "User",
+        Age:       25,
+        ResetToken: "testtoken",
+        ResetTokenExpiresAt: time.Now().Add(1 * time.Hour),
+    }
+    service.users[3] = user
+    
+    err := service.ResetPassword("testtoken", "newpassword123")
+    if err != nil {
+        t.Errorf("ResetPassword('testtoken', 'newpassword123') returned error: %v", err)
+    }
+    
+    // Verify token was cleared
+    updatedUser, err := service.GetUserByID(3)
+    if err != nil {
+        t.Errorf("Failed to get user after reset: %v", err)
+    }
+    
+    if updatedUser.ResetToken != "" {
+        t.Error("Expected ResetPassword to clear reset token")
+    }
+    
+    if updatedUser.ResetTokenExpiresAt.IsZero() {
+        t.Error("Expected ResetPassword to clear expiration time")
+    }
+    
+    // Test with invalid token
+    err = service.ResetPassword("invalidtoken", "newpassword")
+    if err == nil {
+        t.Error("Expected ResetPassword to return error for invalid token")
+    }
+    
+    if err.Error() != "invalid reset token" {
+        t.Errorf("Expected specific error for invalid token, got: %v", err)
+    }
+    
+    // Test with expired token
+    expiredUser := &models.User{
+        ID:        4,
+        Username:  "expireduser",
+        Email:     "expired@example.com",
+        FirstName: "Expired",
+        LastName:  "User",
+        Age:       25,
+        ResetToken: "expiredtoken",
+        ResetTokenExpiresAt: time.Now().Add(-1 * time.Hour), // Expired
+    }
+    service.users[4] = expiredUser
+    
+    err = service.ResetPassword("expiredtoken", "newpassword")
+    if err == nil {
+        t.Error("Expected ResetPassword to return error for expired token")
+    }
+    
+    if err.Error() != "reset token has expired" {
+        t.Errorf("Expected specific error for expired token, got: %v", err)
+    }
+}
+
+// TestUserService_ValidateResetToken tests token validation
+func TestUserService_ValidateResetToken(t *testing.T) {
+    service := NewMockUserService()
+    
+    // Add a user with valid token
+    user := &models.User{
+        ID:        5,
+        Username:  "validtokenuser",
+        Email:     "validtoken@example.com",
+        FirstName: "ValidToken",
+        LastName:  "User",
+        Age:       25,
+        ResetToken: "validtoken",
+        ResetTokenExpiresAt: time.Now().Add(1 * time.Hour),
+    }
+    service.users[5] = user
+    
+    validatedUser, err := service.ValidateResetToken("validtoken")
+    if err != nil {
+        t.Errorf("ValidateResetToken('validtoken') returned error: %v", err)
+    }
+    
+    if validatedUser.ID != 5 {
+        t.Errorf("ValidateResetToken returned wrong user")
+    }
+    
+    // Test with invalid token
+    _, err = service.ValidateResetToken("invalidtoken")
+    if err == nil {
+        t.Error("Expected ValidateResetToken to return error for invalid token")
+    }
+    
+    if err.Error() != "invalid reset token" {
+        t.Errorf("Expected specific error for invalid token, got: %v", err)
+    }
+    
+    // Test with expired token
+    expiredUser := &models.User{
+        ID:        6,
+        Username:  "expiredtokenuser",
+        Email:     "expiredtoken@example.com",
+        FirstName: "ExpiredToken",
+        LastName:  "User",
+        Age:       25,
+        ResetToken: "expiredtoken",
+        ResetTokenExpiresAt: time.Now().Add(-1 * time.Hour),
+    }
+    service.users[6] = expiredUser
+    
+    _, err = service.ValidateResetToken("expiredtoken")
+    if err == nil {
+        t.Error("Expected ValidateResetToken to return error for expired token")
+    }
+    
+    if err.Error() != "reset token has expired" {
+        t.Errorf("Expected specific error for expired token, got: %v", err)
+    }
+}
+
+// Test running the tests
+func TestMain(m *testing.M) {
+    // Set up any test setup here
+    os.Exit(m.Run())
+}
+
+// TestUserService_UpdateUser tests updating an existing user
+func TestUserService_UpdateUser(t *testing.T) {
+    service := NewMockUserService()
+    
+    // Create a user to update
+    user := &models.User{
+        ID:        1,
+        Username:  "updateuser",
+        Email:     "update@example.com",
+        FirstName: "Update",
+        LastName:  "User",
+        Age:       25,
+    }
+    service.users[1] = user
+    
+    // Test updating with valid data
+    user.Age = 30
+    user.FirstName = "Updated"
+    
+    err := service.UpdateUser(user)
+    if err != nil {
+        t.Errorf("UpdateUser() returned error: %v", err)
+    }
+    
+    // Verify the user was updated
+    updatedUser, err := service.GetUserByID(1)
+    if err != nil {
+        t.Errorf("Failed to get updated user: %v", err)
+    }
+    
+    if updatedUser.Age != 30 {
+        t.Errorf("User age was not updated, got %d, want 30", updatedUser.Age)
+    }
+    
+    if updatedUser.FirstName != "Updated" {
+        t.Errorf("User first name was not updated, got %s, want Updated", updatedUser.FirstName)
+    }
+    
+    // Test updating non-existent user
+    nonExistentUser := &models.User{
+        ID:        999,
+        Username:  "nonexistent",
+        Email:     "nonexistent@example.com",
+        FirstName: "Non",
+        LastName:  "Existent",
+        Age:       40,
+    }
+    
+    err = service.UpdateUser(nonExistentUser)
+    if err == nil {
+        t.Error("Expected UpdateUser to return error for non-existent user")
+    }
+    
+    if err.Error() != "user with ID 999 not found" {
+        t.Errorf("Expected specific error for non-existent user, got: %v", err)
+    }
+    
+    // Test updating with invalid data
+    invalidUser := &models.User{
+        ID:        1,
+        Username:  "",
+        Email:     "update@example.com",
+        FirstName: "Update",
+        LastName:  "User",
+        Age:       30,
+    }
+    
+    err = service.UpdateUser(invalidUser)
+    if err == nil {
+        t.Error("Expected UpdateUser to return validation error for empty username")
+    }
+    
+    if err.Error() != "user validation failed: username cannot be empty" {
+        t.Errorf("Expected specific validation error, got: %v", err)
+    }
+}
+
+// TestUserService_DeleteUser tests deleting a user
+func TestUserService_DeleteUser(t *testing.T) {
+    service := NewMockUserService()
+    
+    // Test deleting an existing user
+    err := service.DeleteUser(1)
+    if err != nil {
+        t.Errorf("DeleteUser(1) returned error: %v", err)
+    }
+    
+    // Verify the user was deleted
+    _, err = service.GetUserByID(1)
+    if err == nil {
+        t.Error("Expected GetUserByID(1) to return error after deletion")
+    }
+    
+    if err.Error() != "user with ID 1 not found" {
+        t.Errorf("Expected specific error after deletion, got: %v", err)
+    }
+    
+    // Test deleting a non-existent user
+    err = service.DeleteUser(999)
+    if err == nil {
+        t.Error("Expected DeleteUser to return error for non-existent user")
+    }
+    
+    if err.Error() != "user with ID 999 not found" {
+        t.Errorf("Expected specific error for non-existent user, got: %v", err)
+    }
+}
+
+// TestUserService_GetUserByUsername tests getting user by username
+func TestUserService_GetUserByUsername(t *testing.T) {
+    service := NewMockUserService()
+    
+    // Test getting existing user by username
+    user, err := service.GetUserByUsername("testuser")
+    if err != nil {
+        t.Errorf("GetUserByUsername('testuser') returned error: %v", err)
+    }
+    
+    if user.Username != "testuser" {
+        t.Errorf("GetUserByUsername('testuser') returned wrong user: %s", user.Username)
+    }
+    
+    // Test getting non-existent user by username
+    user, err = service.GetUserByUsername("nonexistent")
+    if err == nil {
+        t.Error("Expected GetUserByUsername to return error for non-existent user")
+    }
+    
+    if user != nil {
+        t.Error("Expected GetUserByUsername to return nil for non-existent user")
+    }
+    
+    if err.Error() != "user with username 'nonexistent' not found" {
+        t.Errorf("Expected specific error for non-existent username, got: %v", err)
+    }
+}
+
+// TestUserService_SearchUsers tests searching users
+func TestUserService_SearchUsers(t *testing.T) {
+    service := NewMockUserService()
+    
+    // Test searching with valid query
+    users, err := service.SearchUsers("test")
+    if err != nil {
+        t.Errorf("SearchUsers('test') returned error: %v", err)
+    }
+    
+    if len(users) != 1 {
+        t.Errorf("SearchUsers('test') returned %d users, expected 1", len(users))
+    }
+    
+    // Test searching with empty query (should return all users)
+    users, err = service.SearchUsers("")
+    if err != nil {
+        t.Errorf("SearchUsers('') returned error: %v", err)
+    }
+    
+    if len(users) != 1 {
+        t.Errorf("SearchUsers('') returned %d users, expected 1", len(users))
+    }
+}
+
+// TestUserService_GetUserStats tests getting user statistics
+func TestUserService_GetUserStats(t *testing.T) {
+    service := NewMockUserService()
+    
+    stats, err := service.GetUserStats()
+    if err != nil {
+        t.Errorf("GetUserStats() returned error: %v", err)
+    }
+    
+    if stats.TotalUsers != 1 {
+        t.Errorf("GetUserStats() returned total_users %d, expected 1", stats.TotalUsers)
+    }
+    
+    if stats.ActiveUsers != 1 {
+        t.Errorf("GetUserStats() returned active_users %d, expected 1", stats.ActiveUsers)
+    }
+    
+    if stats.InactiveUsers != 0 {
+        t.Errorf("GetUserStats() returned inactive_users %d, expected 0", stats.InactiveUsers)
+    }
+    
+    if stats.AverageAge != 25 {
+        t.Errorf("GetUserStats() returned average_age %d, expected 25", stats.AverageAge)
+    }
+}
+
+// TestUserService_RequestPasswordReset tests password reset request
+func TestUserService_RequestPasswordReset(t *testing.T) {
+    service := NewMockUserService()
+    
+    // Add a user with email for testing
+    user := &models.User{
+        ID:        2,
+        Username:  "resetuser",
+        Email:     "reset@example.com",
+        FirstName: "Reset",
+        LastName:  "User",
+        Age:       25,
+    }
+    service.users[2] = user
+    
+    err := service.RequestPasswordReset("reset@example.com")
+    if err != nil {
+        t.Errorf("RequestPasswordReset('reset@example.com') returned error: %v", err)
+    }
+    
+    // Verify the token was set (in real implementation, check database)
+    if user.ResetToken == "" {
+        t.Error("Expected RequestPasswordReset to set reset token")
+    }
+    
+    if user.ResetTokenExpiresAt.IsZero() {
+        t.Error("Expected RequestPasswordReset to set expiration time")
+    }
+    
+    // Test with non-existent email
+    err = service.RequestPasswordReset("nonexistent@example.com")
+    if err == nil {
+        t.Error("Expected RequestPasswordReset to return error for non-existent email")
+    }
+    
+    if err.Error() != "user with email 'nonexistent@example.com' not found" {
+        t.Errorf("Expected specific error for non-existent email, got: %v", err)
+    }
+}
+
+// TestUserService_ResetPassword tests password reset
+func TestUserService_ResetPassword(t *testing.T) {
+    service := NewMockUserService()
+    
+    // Add a user with reset token for testing
+    user := &models.User{
+        ID:        3,
+        Username:  "resetpwuser",
+        Email:     "resetpw@example.com",
+        FirstName: "ResetPW",
+        LastName:  "User",
+        Age:       25,
+        ResetToken: "testtoken",
+        ResetTokenExpiresAt: time.Now().Add(1 * time.Hour),
+    }
+    service.users[3] = user
+    
+    err := service.ResetPassword("testtoken", "newpassword123")
+    if err != nil {
+        t.Errorf("ResetPassword('testtoken', 'newpassword123') returned error: %v", err)
+    }
+    
+    // Verify token was cleared
+    updatedUser, err := service.GetUserByID(3)
+    if err != nil {
+        t.Errorf("Failed to get user after reset: %v", err)
+    }
+    
+    if updatedUser.ResetToken != "" {
+        t.Error("Expected ResetPassword to clear reset token")
+    }
+    
+    if updatedUser.ResetTokenExpiresAt.IsZero() {
+        t.Error("Expected ResetPassword to clear expiration time")
+    }
+    
+    // Test with invalid token
+    err = service.ResetPassword("invalidtoken", "newpassword")
+    if err == nil {
+        t.Error("Expected ResetPassword to return error for invalid token")
+    }
+    
+    if err.Error() != "invalid reset token" {
+        t.Errorf("Expected specific error for invalid token, got: %v", err)
+    }
+    
+    // Test with expired token
+    expiredUser := &models.User{
+        ID:        4,
+        Username:  "expireduser",
+        Email:     "expired@example.com",
+        FirstName: "Expired",
+        LastName:  "User",
+        Age:       25,
+        ResetToken: "expiredtoken",
+        ResetTokenExpiresAt: time.Now().Add(-1 * time.Hour), // Expired
+    }
+    service.users[4] = expiredUser
+    
+    err = service.ResetPassword("expiredtoken", "newpassword")
+    if err == nil {
+        t.Error("Expected ResetPassword to return error for expired token")
+    }
+    
+    if err.Error() != "reset token has expired" {
+        t.Errorf("Expected specific error for expired token, got: %v", err)
+    }
+}
+
+// TestUserService_ValidateResetToken tests token validation
+func TestUserService_ValidateResetToken(t *testing.T) {
+    service := NewMockUserService()
+    
+    // Add a user with valid token
+    user := &models.User{
+        ID:        5,
+        Username:  "validtokenuser",
+        Email:     "validtoken@example.com",
+        FirstName: "ValidToken",
+        LastName:  "User",
+        Age:       25,
+        ResetToken: "validtoken",
+        ResetTokenExpiresAt: time.Now().Add(1 * time.Hour),
+    }
+    service.users[5] = user
+    
+    validatedUser, err := service.ValidateResetToken("validtoken")
+    if err != nil {
+        t.Errorf("ValidateResetToken('validtoken') returned error: %v", err)
+    }
+    
+    if validatedUser.ID != 5 {
+        t.Errorf("ValidateResetToken returned wrong user")
+    }
+    
+    // Test with invalid token
+    _, err = service.ValidateResetToken("invalidtoken")
+    if err == nil {
+        t.Error("Expected ValidateResetToken to return error for invalid token")
+    }
+    
+    if err.Error() != "invalid reset token" {
+        t.Errorf("Expected specific error for invalid token, got: %v", err)
+    }
+    
+    // Test with expired token
+    expiredUser := &models.User{
+        ID:        6,
+        Username:  "expiredtokenuser",
+        Email:     "expiredtoken@example.com",
+        FirstName: "ExpiredToken",
+        LastName:  "User",
+        Age:       25,
+        ResetToken: "expiredtoken",
+        ResetTokenExpiresAt: time.Now().Add(-1 * time.Hour),
+    }
+    service.users[6] = expiredUser
+    
+    _, err = service.ValidateResetToken("expiredtoken")
+    if err == nil {
+        t.Error("Expected ValidateResetToken to return error for expired token")
+    }
+    
+    if err.Error() != "reset token has expired" {
+        t.Errorf("Expected specific error for expired token, got: %v", err)
+    }
+}
 
